@@ -63,7 +63,7 @@ import sun.security.x509.X500Name;
  * compatible with the mincrypt verifier, using SHA1 and RSA keys.
  */
 @SuppressWarnings("restriction")
-class Sign {
+public class Sign {
   private static final String CERT_SF_NAME = "META-INF/CERT.SF";
   private static final String CERT_RSA_NAME = "META-INF/CERT.RSA";
 
