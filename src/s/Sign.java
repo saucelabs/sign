@@ -494,7 +494,6 @@ public class Sign {
       }
     } catch (Exception e) {
       e.printStackTrace();
-      System.exit(1);
     } finally {
       try {
         if (renamedInput != null) {
@@ -508,7 +507,6 @@ public class Sign {
         }
       } catch (IOException e) {
         e.printStackTrace();
-        System.exit(1);
       }
     }
   }
