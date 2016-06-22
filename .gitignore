@@ -1,6 +1,10 @@
 bin/
 target/
+dist/
 .settings
 .project
 .classpath
 *.log
+*.iml
+.idea
+.DS_Store

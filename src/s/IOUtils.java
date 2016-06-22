@@ -23,46 +23,46 @@ import java.io.OutputStream;
 
 public class IOUtils {
 
-  /**
-   * Get the contents of an <code>InputStream</code> as a <code>byte[]</code>.
-   * <p>
-   * This method buffers the input internally, so there is no need to use a
-   * <code>BufferedInputStream</code>.
-   * 
-   * @param input
-   *          the <code>InputStream</code> to read from
-   * @return the requested byte array
-   */
-  public static byte[] toByteArray(InputStream input) {
-    try {
-      ByteArrayOutputStream output = new ByteArrayOutputStream();
-      copy(input, output);
-      return output.toByteArray();
-    } catch (Exception e) {
-      e.printStackTrace();
-      return null;
-    }
-  }
+	/**
+	 * Get the contents of an <code>InputStream</code> as a <code>byte[]</code>.
+	 * <p>
+	 * This method buffers the input internally, so there is no need to use a
+	 * <code>BufferedInputStream</code>.
+	 *
+	 * @param input
+	 *          the <code>InputStream</code> to read from
+	 * @return the requested byte array
+	 */
+	public static byte[] toByteArray(InputStream input) {
+		try {
+			ByteArrayOutputStream output = new ByteArrayOutputStream();
+			copy(input, output);
+			return output.toByteArray();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
 
-  private static int copy(InputStream input, OutputStream output)
-      throws IOException {
-    long count = copyLarge(input, output);
-    if (count > Integer.MAX_VALUE) {
-      return -1;
-    }
-    return (int) count;
-  }
+	private static int copy(InputStream input, OutputStream output)
+			throws IOException {
+		long count = copyLarge(input, output);
+		if (count > Integer.MAX_VALUE) {
+			return -1;
+		}
+		return (int) count;
+	}
 
-  private static long copyLarge(InputStream input, OutputStream output)
-      throws IOException {
-    byte[] buffer = new byte[4096];
-    long count = 0;
-    int n = 0;
-    while (-1 != (n = input.read(buffer))) {
-      output.write(buffer, 0, n);
-      count += n;
-    }
-    return count;
-  }
+	private static long copyLarge(InputStream input, OutputStream output)
+			throws IOException {
+		byte[] buffer = new byte[4096];
+		long count = 0;
+		int n = 0;
+		while (-1 != (n = input.read(buffer))) {
+			output.write(buffer, 0, n);
+			count += n;
+		}
+		return count;
+	}
 
 }
