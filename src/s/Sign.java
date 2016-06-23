@@ -302,7 +302,7 @@ public class Sign {
 		}
 
 		try (JarFile inputJar = new JarFile(new File(inputApkPath), false);
-				FileOutputStream outputStream = new FileOutputStream(new File(outputApkPath))) {
+				JarOutputStream outputJar = new JarOutputStream(new FileOutputStream(new File(outputApkPath)))) {
 			X509Certificate publicKey = readPublicKey();
 
 			// Assume the certificate is valid for at least an hour.
@@ -310,7 +310,6 @@ public class Sign {
 
 			PrivateKey privateKey = readPrivateKey();
 
-			JarOutputStream outputJar = new JarOutputStream(outputStream);
 			outputJar.setLevel(9);
 
 			Manifest manifest = addDigestsToManifest(inputJar);
@@ -338,9 +337,6 @@ public class Sign {
 			je.setTime(timestamp);
 			outputJar.putNextEntry(je);
 			writeSignatureBlock(signature, publicKey, outputJar);
-
-			outputJar.close();
-			outputStream.flush();
 		} catch (Exception e) {
 			throw new IOException("Unexpected condition", e);
 		} finally {
