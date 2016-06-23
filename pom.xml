@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>appium</groupId>
   <artifactId>sign</artifactId>
-  <version>0.0.2</version>
+  <version>0.0.3</version>
   <packaging>jar</packaging>
 
 <!--
@@ -55,6 +55,14 @@ Main-Class: s.Sign
           </archive>
         </configuration>
       </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+                <source>1.7</source>
+                <target>1.7</target>
+            </configuration>
+        </plugin>
     </plugins>
 
   </build>

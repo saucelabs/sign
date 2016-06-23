@@ -16,47 +16,23 @@
 
 package s;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FilterOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.security.DigestOutputStream;
-import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.MessageDigest;
-import java.security.PrivateKey;
-import java.security.Signature;
-import java.security.SignatureException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.KeySpec;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.jar.Attributes;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Manifest;
-import java.util.regex.Pattern;
-
 import sun.misc.BASE64Encoder;
 import sun.security.pkcs.ContentInfo;
 import sun.security.pkcs.PKCS7;
 import sun.security.pkcs.SignerInfo;
 import sun.security.x509.AlgorithmId;
 import sun.security.x509.X500Name;
+
+import java.io.*;
+import java.security.*;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.*;
+import java.util.jar.*;
+import java.util.regex.Pattern;
 
 /**
  * Command line tool to sign JAR files (including APKs and OTA updates) in a way
@@ -142,36 +118,6 @@ public class Sign {
 		}
 
 		return output;
-	}
-
-	/**
-	 * Add a copy of the public key to the archive; this should exactly match one
-	 * of the files in /system/etc/security/otacerts.zip on the device. (The same
-	 * cert can be extracted from the CERT.RSA file but this is much easier to get
-	 * at.)
-	 */
-	private static void addOtacert(JarOutputStream outputJar, long timestamp,
-			Manifest manifest) throws IOException, GeneralSecurityException {
-		final InputStream input = new ByteArrayInputStream(publicBytes);
-
-		BASE64Encoder base64 = new BASE64Encoder();
-		MessageDigest md = MessageDigest.getInstance("SHA1");
-
-		JarEntry je = new JarEntry(OTACERT_NAME);
-		je.setTime(timestamp);
-		outputJar.putNextEntry(je);
-
-		byte[] b = new byte[4096];
-		int read;
-		while ((read = input.read(b)) != -1) {
-			outputJar.write(b, 0, read);
-			md.update(b, 0, read);
-		}
-		input.close();
-
-		Attributes attr = new Attributes();
-		attr.putValue("SHA1-Digest", base64.encode(md.digest()));
-		manifest.getEntries().put(OTACERT_NAME, attr);
 	}
 
 	/** Write to another stream and also feed it to the Signature object. */
@@ -271,76 +217,6 @@ public class Sign {
 		pkcs7.encodeSignedData(out);
 	}
 
-	private static void signWholeOutputFile(byte[] zipData,
-			OutputStream outputStream, X509Certificate publicKey,
-			PrivateKey privateKey) throws IOException, GeneralSecurityException {
-
-		// For a zip with no archive comment, the
-		// end-of-central-directory record will be 22 bytes long, so
-		// we expect to find the EOCD marker 22 bytes from the end.
-		if (zipData[zipData.length - 22] != 0x50
-				|| zipData[zipData.length - 21] != 0x4b
-				|| zipData[zipData.length - 20] != 0x05
-				|| zipData[zipData.length - 19] != 0x06) {
-			throw new IllegalArgumentException(
-					"zip data already has an archive comment");
-		}
-
-		Signature signature = Signature.getInstance("SHA1withRSA");
-		signature.initSign(privateKey);
-		signature.update(zipData, 0, zipData.length - 2);
-
-		ByteArrayOutputStream temp = new ByteArrayOutputStream();
-
-		// put a readable message and a null char at the start of the
-		// archive comment, so that tools that display the comment
-		// (hopefully) show something sensible.
-		// TODO: anything more useful we can put in this message?
-		byte[] message = "signed by SignApk".getBytes("UTF-8");
-		temp.write(message);
-		temp.write(0);
-		writeSignatureBlock(signature, publicKey, temp);
-		int total_size = temp.size() + 6;
-		if (total_size > 0xffff) {
-			throw new IllegalArgumentException(
-					"signature is too big for ZIP file comment");
-		}
-		// signature starts this many bytes from the end of the file
-		int signature_start = total_size - message.length - 1;
-		temp.write(signature_start & 0xff);
-		temp.write((signature_start >> 8) & 0xff);
-		// Why the 0xff bytes? In a zip file with no archive comment,
-		// bytes [-6:-2] of the file are the little-endian offset from
-		// the start of the file to the central directory. So for the
-		// two high bytes to be 0xff 0xff, the archive would have to
-		// be nearly 4GB in side. So it's unlikely that a real
-		// commentless archive would have 0xffs here, and lets us tell
-		// an old signed archive from a new one.
-		temp.write(0xff);
-		temp.write(0xff);
-		temp.write(total_size & 0xff);
-		temp.write((total_size >> 8) & 0xff);
-		temp.flush();
-
-		// Signature verification checks that the EOCD header is the
-		// last such sequence in the file (to avoid minzip finding a
-		// fake EOCD appended after the signature in its scan). The
-		// odds of producing this sequence by chance are very low, but
-		// let's catch it here if it does.
-		byte[] b = temp.toByteArray();
-		for (int i = 0; i < b.length - 3; ++i) {
-			if (b[i] == 0x50 && b[i + 1] == 0x4b && b[i + 2] == 0x05
-					&& b[i + 3] == 0x06) {
-				throw new IllegalArgumentException("found spurious EOCD header at " + i);
-			}
-		}
-
-		outputStream.write(zipData, 0, zipData.length - 2);
-		outputStream.write(total_size & 0xff);
-		outputStream.write((total_size >> 8) & 0xff);
-		temp.writeTo(outputStream);
-	}
-
 	/**
 	 * Copy all the files in a manifest from input to output. We set the
 	 * modification times in the output to a fixed time, so as to reduce variation
@@ -352,11 +228,11 @@ public class Sign {
 		int num;
 
 		Map<String, Attributes> entries = manifest.getEntries();
-		List<String> names = new ArrayList<String>(entries.keySet());
+		List<String> names = new ArrayList<>(entries.keySet());
 		Collections.sort(names);
 		for (String name : names) {
 			JarEntry inEntry = in.getJarEntry(name);
-			JarEntry outEntry = null;
+			JarEntry outEntry;
 			if (inEntry.getMethod() == JarEntry.STORED) {
 				// Preserve the STORED method of the input entry.
 				outEntry = new JarEntry(inEntry);
@@ -399,14 +275,14 @@ public class Sign {
 	// Only compile the pattern once.
 	private static Pattern endApk = Pattern.compile("\\.apk$");
 
-	public static void sign(String inputApkPath, boolean override) {
+	public static void sign(String inputApkPath, boolean override) throws IOException {
 		String outputApkPath = endApk.matcher(inputApkPath).replaceAll("")
 				+ ".s.apk";
 
 		final File input = new File(inputApkPath);
 
 		if (!input.exists() || !input.isFile()) {
-			throw new RuntimeException("Input is not an existing file. " + inputApkPath);
+			throw new IOException("Input is not an existing file. " + inputApkPath);
 		}
 
 		File renamedInput = null;
@@ -418,51 +294,31 @@ public class Sign {
 					new Date().getTime() + ".tmp");
 
 			if (!input.renameTo(renamedInput)) {
-				throw new RuntimeException("Unable to rename input apk. "
+				throw new IOException("Unable to rename input apk. "
 						+ inputApkPath);
 			}
 
 			inputApkPath = renamedInput.getAbsolutePath();
 		}
 
-		boolean signWholeFile = false;
-
-		JarFile inputJar = null;
-		JarOutputStream outputJar = null;
-		FileOutputStream outputFile = null;
-
-		try {
+		try (JarFile inputJar = new JarFile(new File(inputApkPath), false);
+				JarOutputStream outputJar = new JarOutputStream(new FileOutputStream(new File(outputApkPath)))) {
 			X509Certificate publicKey = readPublicKey();
 
 			// Assume the certificate is valid for at least an hour.
 			long timestamp = publicKey.getNotBefore().getTime() + 3600L * 1000;
 
 			PrivateKey privateKey = readPrivateKey();
-			inputJar = new JarFile(new File(inputApkPath), false); // Don't verify.
 
-			OutputStream outputStream = null;
-			if (signWholeFile) {
-				outputStream = new ByteArrayOutputStream();
-			} else {
-				outputStream = outputFile = new FileOutputStream(new File(outputApkPath));
-			}
-			outputJar = new JarOutputStream(outputStream);
 			outputJar.setLevel(9);
-
-			JarEntry je;
 
 			Manifest manifest = addDigestsToManifest(inputJar);
 
 			// Everything else
 			copyFiles(manifest, inputJar, outputJar, timestamp);
 
-			// otacert
-			if (signWholeFile) {
-				addOtacert(outputJar, timestamp, manifest);
-			}
-
 			// MANIFEST.MF
-			je = new JarEntry(JarFile.MANIFEST_NAME);
+			JarEntry je = new JarEntry(JarFile.MANIFEST_NAME);
 			je.setTime(timestamp);
 			outputJar.putNextEntry(je);
 			manifest.write(outputJar);
@@ -481,53 +337,11 @@ public class Sign {
 			je.setTime(timestamp);
 			outputJar.putNextEntry(je);
 			writeSignatureBlock(signature, publicKey, outputJar);
-
-			outputJar.close();
-			outputJar = null;
-			outputStream.flush();
-
-			if (signWholeFile) {
-				outputFile = new FileOutputStream(outputApkPath);
-				signWholeOutputFile(
-						((ByteArrayOutputStream) outputStream).toByteArray(), outputFile,
-						publicKey, privateKey);
-			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			throw new IOException("Unexpected condition", e);
 		} finally {
-			try {
-				if (renamedInput != null) {
-					delete(renamedInput);
-				}
-				if (inputJar != null) {
-					inputJar.close();
-				}
-				if (outputFile != null) {
-					outputFile.close();
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	public static void main(String[] args) {
-		if (args.length < 1) {
-			System.out.println("Usage: java -jar sign.jar my_1.apk [my_2.apk ...] [--override]");
-			System.exit(0);
-		}
-
-		boolean override = false;
-		for (final String arg : args) {
-			if (arg.toLowerCase().equals("--override")) {
-				override = true;
-				break;
-			}
-		}
-
-		for (final String apk : args) {
-			if (apk.toLowerCase().endsWith(".apk")) {
-				sign(apk, override);
+			if (renamedInput != null) {
+				delete(renamedInput);
 			}
 		}
 	}
