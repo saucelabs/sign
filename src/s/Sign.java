@@ -294,7 +294,7 @@ public class Sign {
 					new Date().getTime() + ".tmp");
 
 			if (!input.renameTo(renamedInput)) {
-				throw new RuntimeException("Unable to rename input apk. "
+				throw new IOException("Unable to rename input apk. "
 						+ inputApkPath);
 			}
 
