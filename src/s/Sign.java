@@ -282,7 +282,7 @@ public class Sign {
 		final File input = new File(inputApkPath);
 
 		if (!input.exists() || !input.isFile()) {
-			throw new RuntimeException("Input is not an existing file. " + inputApkPath);
+			throw new IOException("Input is not an existing file. " + inputApkPath);
 		}
 
 		File renamedInput = null;
